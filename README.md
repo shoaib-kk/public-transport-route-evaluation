@@ -18,9 +18,9 @@ output:
 - reason for recommendation 
 
 main data sources to use 
-- GFTS static timetable feed 
-- GFTS  realtime trpi updates 
-GFTS real time vehicle positions 
+- GTFS static timetable feed 
+- GTFS realtime trip updates 
+GTFS real time vehicle positions 
 
 
 links being used:
