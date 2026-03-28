@@ -1,0 +1,5 @@
+fastapi
+protobuf
+requests
+streamlit
+uvicorn
