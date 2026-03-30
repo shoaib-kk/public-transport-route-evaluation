@@ -3,3 +3,6 @@ protobuf
 requests
 streamlit
 uvicorn
+numpy
+scikit-learn
+pandas
