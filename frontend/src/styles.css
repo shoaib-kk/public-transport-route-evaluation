@@ -185,6 +185,13 @@ button:disabled {
   margin-top: 10px;
 }
 
+.legs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
 .error {
   color: #fca5a5;
   font-size: 14px;

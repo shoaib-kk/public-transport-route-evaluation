@@ -23,7 +23,7 @@ def _ensure_dirs() -> None:
 
 def _default_regressor() -> Any:
     """
-    Prefer XGBoost/LightGBM if available, otherwise fall back to GradientBoostingRegressor.
+    Use XGBoost/LightGBM where possible, otherwise  GradientBoostingRegressor.
     """
     try:
         from xgboost import XGBRegressor
@@ -119,7 +119,8 @@ def _features_from_response(record: dict[str, Any]) -> tuple[list[float], float]
 def train_delay_model(limit: int = 2000) -> dict[str, float] | None:
     """
     Train a regression model from stored route_evaluations history.
-    Returns evaluation metrics; saves the fitted model to disk.
+    Returns evaluation metrics
+      saves the fitted model to disk.
     """
     rows = list(_rows_from_db(limit))
     dataset: list[tuple[list[float], float]] = []

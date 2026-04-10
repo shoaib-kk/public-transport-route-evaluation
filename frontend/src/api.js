@@ -27,3 +27,8 @@ export async function compareRoutes(routeIds) {
   });
   return res.data;
 }
+
+export async function getFeedStatus() {
+  const res = await axios.get(`${API_BASE}/latest-feed-status`);
+  return res.data;
+}

@@ -1,10 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  getSampleRoutes,
-  evaluateRoute,
-  getRouteHistory,
-  compareRoutes,
-} from "./api";
+import { useEffect, useState } from "react";
+import { getSampleRoutes, evaluateRoute, getRouteHistory, compareRoutes, getFeedStatus } from "./api";
 import { Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -72,55 +67,6 @@ function ComparePanel({ routes, onCompare }) {
   );
 }
 
-function TrendChart({ timeseries }) {
-  const data = useMemo(() => {
-    const labels = timeseries.map((p) => new Date(p.created_at).toLocaleTimeString());
-    return {
-      labels,
-      datasets: [
-        {
-          label: "Expected Delay (min)",
-          data: timeseries.map((p) => p.expected_delay_minutes),
-          borderColor: "#f97316",
-          backgroundColor: "rgba(249, 115, 22, 0.2)",
-          tension: 0.25,
-          yAxisID: "y",
-        },
-        {
-          label: "Reliability Score",
-          data: timeseries.map((p) => p.route_reliability_score),
-          borderColor: "#22d3ee",
-          backgroundColor: "rgba(34, 211, 238, 0.2)",
-          tension: 0.25,
-          yAxisID: "y1",
-        },
-      ],
-    };
-  }, [timeseries]);
-
-  const options = {
-    responsive: true,
-    scales: {
-      y: { position: "left", title: { display: true, text: "Delay (min)" }, grid: { color: "rgba(255,255,255,0.05)" } },
-      y1: {
-        position: "right",
-        title: { display: true, text: "Reliability" },
-        grid: { drawOnChartArea: false },
-        min: 0,
-        max: 100,
-      },
-    },
-    plugins: { legend: { labels: { color: "#e2e8f0" } } },
-  };
-
-  return (
-    <div className="card chart">
-      <div className="section-title">Trend (latest)</div>
-      {timeseries.length === 0 ? <div className="muted">No history yet.</div> : <Line data={data} options={options} />}
-    </div>
-  );
-}
-
 export default function App() {
   const [routes, setRoutes] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -128,6 +74,7 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [summary, setSummary] = useState(null);
   const [compareResult, setCompareResult] = useState(null);
+   const [feedStatus, setFeedStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -137,6 +84,8 @@ export default function App() {
         const data = await getSampleRoutes();
         setRoutes(data);
         setSelected(data[0]?.route_id ?? null);
+        const feed = await getFeedStatus();
+        setFeedStatus(feed.decoded);
       } catch (err) {
         setError("Could not load sample routes.");
       }
@@ -162,6 +111,8 @@ export default function App() {
       const res = await evaluateRoute(selected);
       setResult(res);
       await fetchHistory(res.route_id);
+      const feed = await getFeedStatus();
+      setFeedStatus(feed.decoded);
     } catch (err) {
       setError("Failed to score route. Is the backend running?");
     } finally {
@@ -254,9 +205,105 @@ export default function App() {
       )}
 
       <section className="grid">
-        <TrendChart timeseries={history} />
-        <ComparePanel routes={routes} onCompare={handleCompare} />
+        <div className="card chart">
+          <div className="section-title">Reliability over time</div>
+          {history.length === 0 ? (
+            <div className="muted">No history yet.</div>
+          ) : (
+            <Line
+              data={{
+                labels: history.map((p) => new Date(p.created_at).toLocaleString()),
+                datasets: [
+                  {
+                    label: "Reliability",
+                    data: history.map((p) => p.route_reliability_score),
+                    borderColor: "#22d3ee",
+                    backgroundColor: "rgba(34, 211, 238, 0.2)",
+                    tension: 0.25,
+                  },
+                ],
+              }}
+              options={{ scales: { y: { min: 0, max: 100 } } }}
+            />
+          )}
+        </div>
+
+        <div className="card chart">
+          <div className="section-title">Delay over time</div>
+          {history.length === 0 ? (
+            <div className="muted">No history yet.</div>
+          ) : (
+            <Line
+              data={{
+                labels: history.map((p) => new Date(p.created_at).toLocaleString()),
+                datasets: [
+                  {
+                    label: "Expected delay (min)",
+                    data: history.map((p) => p.expected_delay_minutes),
+                    borderColor: "#f97316",
+                    backgroundColor: "rgba(249, 115, 22, 0.2)",
+                    tension: 0.25,
+                  },
+                ],
+              }}
+              options={{ scales: { y: { beginAtZero: true } } }}
+            />
+          )}
+        </div>
       </section>
+
+      <section className="grid">
+        <ComparePanel routes={routes} onCompare={handleCompare} />
+
+        <div className="card">
+          <div className="section-title">Feed health</div>
+          {feedStatus ? (
+            <div className="metrics">
+              <MetricCard label="Alerts in memory" value={feedStatus.alerts_in_memory} />
+              <MetricCard label="Vehicle positions" value={feedStatus.vehicle_positions_in_memory} />
+              <MetricCard
+                label="Vehicle feed age"
+                value={
+                  feedStatus.vehicle_feed_age_seconds !== null
+                    ? `${feedStatus.vehicle_feed_age_seconds}s`
+                    : "unknown"
+                }
+              />
+              <MetricCard
+                label="Static feed"
+                value={feedStatus.static?.available ? "available" : "missing"}
+                hint={feedStatus.static?.snapshot_path}
+              />
+              <MetricCard
+                label="Historical feed"
+                value={feedStatus.historical?.available ? "available" : "missing"}
+                hint={feedStatus.historical?.snapshot_path}
+              />
+            </div>
+          ) : (
+            <div className="muted">Feed status not available yet.</div>
+          )}
+        </div>
+      </section>
+
+      {result && result.legs && (
+        <section className="card">
+          <div className="section-title">Per-leg breakdown</div>
+          <div className="legs-grid">
+            {result.legs.map((leg) => (
+              <div key={leg.leg_id} className="card mini">
+                <div className="metric-label">{leg.line}</div>
+                <div className="metric-value">{leg.route_id}</div>
+                <div className="metric-hint">Risk: {leg.current_risk}</div>
+                <div className="metric-hint">Expected delay: {leg.expected_delay_minutes} min</div>
+                <div className="metric-hint">Matched alerts: {leg.matched_alerts}</div>
+                <div className="metric-hint">Active vehicles: {leg.active_vehicles}</div>
+                <div className="metric-hint">Transfer risk: {leg.transfer_risk}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {compareResult && (
         <section className="card">

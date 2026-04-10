@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from transport_app.feed_processing import historical_feed_status, parse_alerts, parse_vehicle_positions, static_feed_status
+from transport_app.feed_processing import (
+    historical_feed_status,
+    parse_alerts,
+    parse_vehicle_positions,
+    static_feed_status,
+    vehicle_feed_age_seconds,
+)
 from transport_app.metrics import rolling_summary, route_timeseries
 from transport_app.modeling import train_delay_model
 from transport_app.models import FeedStatus, RouteEvaluationRequest, RouteEvaluationResponse
@@ -14,6 +23,16 @@ from transport_app.storage import init_db, latest_feed_statuses, record_route_ev
 
 app = FastAPI(title="NSW Route Reliability API", version="0.1.0")
 init_db()
+
+# CORS for frontend (Vercel/Render). Use FRONTEND_ORIGIN env or allow all.
+origins = [os.getenv("FRONTEND_ORIGIN", "*")]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class CompareRoutesRequest(BaseModel):
@@ -34,9 +53,11 @@ def sample_routes() -> list[dict]:
 @app.get("/latest-feed-status")
 def latest_feed_status() -> dict[str, object]:
     statuses = latest_feed_statuses()
+    vehicle_summary = parse_vehicle_positions()
     decoded = {
         "alerts_in_memory": parse_alerts().entity_count,
-        "vehicle_positions_in_memory": parse_vehicle_positions().entity_count,
+        "vehicle_positions_in_memory": vehicle_summary.entity_count,
+        "vehicle_feed_age_seconds": vehicle_feed_age_seconds(vehicle_summary),
         "static": static_feed_status(),
         "historical": historical_feed_status(),
     }

@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+
+# Local data/cache
+app_data/
+*.db
+
+data/**
+!data/
+!data/**/
+!data/**/.gitkeep
